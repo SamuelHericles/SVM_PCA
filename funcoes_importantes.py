@@ -1,12 +1,12 @@
 """
-                      Universidade Federal do Ceará
-                            Campus - Sobral
-                     Curso de Engenharia da Computação
-                   Disciplina de Reconhecimento de Padrões
-                             4º TRABALHO
-                     SAMUEL HERICLES SOUZA SILVEIRA
+                                                     Universidade Federal do Ceará
+                                                           Campus - Sobral
+                                                    Curso de Engenharia da Computação
+                                                  Disciplina de Reconhecimento de Padrões
+                                                             4º TRABALHO
+                                                     SAMUEL HERICLES SOUZA SILVEIRA
 
-Este arquivo consta as funções importantes ou base para programação dos algoritmos requisitados.
+                    Este arquivo consta as funções importantes ou base para programação dos algoritmos requisitados.
 """
 
 # Imports necessários
@@ -23,11 +23,26 @@ também caso vá ser executado no google colab não precisão dos imports do goo
 eu organizo os dados pela o atributo da ultima coluna no qual esta são os rótulos das amostras.
 """
 class carrega_base:
-    caminho = 'https://raw.githubusercontent.com/SamuelHericles/Algoritmos_de_classificao_baysianos/master/dema_dados.csv'
-    derma_dados = pd.read_csv(caminho)
-    derma_dados.sort_values('c35',inplace=True)
-    derma_dados.reset_index(drop=True,inplace=True)
-
+    caminho = 'https://raw.githubusercontent.com/SamuelHericles/SVM_PCA/master/ground_urban_df.csv'
+    urban_df = pd.read_csv(caminho)
+    urban_df.rename(columns={'class':'c35'},inplace=True)
+    urban_df['c35'].unique()
+    indeces = {
+      'car':1,
+      'concrete':2,
+      'tree':3,
+      'building':4,
+      'asphalt':5,
+      'grass':6,
+      'shadow':7,
+      'soil':8,
+      'pool':9
+    }
+    
+    urban_df.sort_values('c35',inplace=True)
+    urban_df.replace(indeces,inplace=True)
+    urban_df.reset_index(drop=True,inplace=True)
+    
     
 """
     Classe das funções bases ou principais
@@ -39,7 +54,7 @@ class funcoes_main:
     
     # Função para for carregada a classe funcoes_main já carrega a base dados
     def __init__(self):
-        self.base = carrega_base.derma_dados
+        self.base = carrega_base.urban_df
 
     # Calcula a média de cada atributo e armazena em um vetor, neste caso, o vetor é um dataframe de uma linha só e com 34 colunas
     def vetor_medio(self,base):
@@ -280,6 +295,27 @@ class funcoes_main:
                 df_m_confusao.iloc[i,j] = df_resultado.query('Esperado=='+str(i+1)+' and Previsto=='+str(j+1)).sum()[0]
         return df_m_confusao
 
+    def matriz_confusao_binario(self,y_true,y_pred):    
+        df_m_confusao = pd.DataFrame(index=[1,-1],columns=[1,-1])
+
+        df_m_confusao.iloc[0,0] = 0 
+        df_m_confusao.iloc[0,1] = 0
+        df_m_confusao.iloc[1,1] = 0
+        df_m_confusao.iloc[1,0] = 0     
+
+        for i in range(y_true.shape[0]):
+            if y_true[i] == 1 and y_pred[i] == 1:
+                df_m_confusao.iloc[0,0] += 1
+            if y_true[i] == -1 and y_pred[i] == -1:
+                df_m_confusao.iloc[1,1] += 1
+            if y_true[i] == 1 and y_pred[i] == -1:
+                df_m_confusao.iloc[0,1] += 1
+            if y_true[i] == -1 and y_pred[i] == 1:
+                df_m_confusao.iloc[1,0] += 1
+
+        return df_m_confusao
+    
+    
     # Calcula a precisão dos dados
     def precisao(self,TP,FP):
         return TP/(FP+TP)
@@ -301,9 +337,9 @@ class funcoes_main:
         metricas = []
         for classe in range(df_m_confusao.shape[0]):
             TP = df_m_confusao.iloc[classe,classe]
-            valores = [i for i in range(6) if i!=classe]
+            valores = [i for i in range(df_m_confusao.shape[0]) if i!=classe]
             FP = np.sum(df_m_confusao.iloc[classe,valores])
-            TN = np.sum([df_m_confusao.iloc[i,i] for i in range(6) if i!=classe])
+            TN = np.sum([df_m_confusao.iloc[i,i] for i in range(df_m_confusao.shape[0]) if i!=classe])
             FN = np.sum(df_m_confusao.iloc[valores,classe])
 
             resultados = {
@@ -333,27 +369,43 @@ class funcoes_main:
         plt.title('Matriz de confusão')
         plt.show()
         
+    def plot_matiz_de_confusao_binaria(self,df_m_confusao):
+        classes={1:'+1',2:'-1'}
+        df_m_confusao.rename(columns=classes,index=classes,inplace=True)
+
+        group_counts = ["{0:0.0f}".format(value) for value in df_m_confusao.values.flatten()]
+        group_percentages = ["{0:.2%}".format(value) for value in df_m_confusao.values.flatten()/np.sum(df_m_confusao.values)]
+
+        labels = [f"{v1}\n{v2}" for v1, v2 in zip(group_counts,group_percentages)]
+
+        labels = np.asarray(labels).reshape(2,2)
+        plt.figure(figsize=(10,6))
+        sns.heatmap(df_m_confusao.astype(float), annot=labels, fmt='', cmap='Blues');
+        plt.title('Matriz de confusão')
+        plt.show()
+            
+      
     # Classificação com multi-classe: 1 vs all, quem for da classe 1(por exemplo) fica com 1 e o resto com -1
-    def classe_1_menos_1(base,classe):
+    def classe_1_menos_1(self,base,classe):
         y = pd.concat([pd.DataFrame(np.ones([base.query('c35 == '+str(classe)).shape[0],1])),
                        pd.DataFrame(-np.ones([base.query('c35 != '+str(classe)).shape[0],1]))])
         y.reset_index(drop=True,inplace=True) 
         return y
 
     # Ordenar a base dados pelos rótulos
-    def ordena_por_classe(base):
+    def ordena_por_classe(self,base):
         base.sort_values('c35',inplace=True)
         base.reset_index(drop=True,inplace=True)
         return base
 
     # A base de dados urban é muito desbalanceada, então fiz a normalização max-min para deixar valores entre {0,1}
-    def normaliza_max_min(base):
-        aux = base.iloc[:,:-1]
+    def normaliza_max_min(self,base):
+        aux = self.base.iloc[:,:-1]
         aux = (aux - aux.min())/(aux.max()-aux.min())
-        aux['c35'] = base['c35']
+        aux['c35'] = self.base['c35']
         return aux
     
     # Pegar a acurácia da base urban, a getacc antes era para pegar a acuráica para o trabalho anterior de LDA.
-    def acc(y_true, y_pred):
-        return round(sum(y_pred==y_true.values[:,0])/y_pred.shape[0],2)        
+    def acc(self,y_true, y_pred):
+        return round(sum(y_pred==y_true)/y_pred.shape[0],2)        
         
